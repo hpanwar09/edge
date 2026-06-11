@@ -56,11 +56,13 @@
                   class="form-check-input"
                   type="radio"
                   name="graphDisplay"
-                  value="full"
-                  id="full"
+                  value="connected"
+                  id="connected"
                   checked
                 />
-                <label class="form-check-label" for="full">Full Graph</label>
+                <label class="form-check-label" for="connected"
+                  >Connected Only</label
+                >
               </div>
               <div class="form-check">
                 <input
@@ -71,6 +73,18 @@
                   id="cycles"
                 />
                 <label class="form-check-label" for="cycles">Cycles Only</label>
+              </div>
+              <div class="form-check">
+                <input
+                  class="form-check-input"
+                  type="radio"
+                  name="graphDisplay"
+                  value="full"
+                  id="full"
+                />
+                <label class="form-check-label" for="full"
+                  >Full Graph (slow)</label
+                >
               </div>
               <div class="form-check">
                 <input
@@ -112,7 +126,7 @@
               id="toggle-all-types"
               class="text-decoration-none"
               style="font-size: 0.9em"
-              >Deselect All</a
+              >Select All</a
             >
           </div>
           <div
@@ -253,62 +267,19 @@
 
     function renderGraph(graph, cycles) {
       const width = window.innerWidth;
-      const height = window.innerHeight;
+      const height = window.innerHeight * 0.7;
 
-      d3.select("svg").remove();
+      const container = document.getElementById("container");
+      container.innerHTML = "";
 
-      const svg = d3
-        .select("#container")
-        .append("svg")
-        .attr("viewBox", `0 0 ${width} ${height}`) // Coordinate system
-        .attr("preserveAspectRatio", "xMidYMid meet"); // Preserve scaling
-
-      const zoomGroup = svg.append("g");
-
-      const simulation = d3
-        .forceSimulation(graph.nodes)
-        .force(
-          "link",
-          d3
-            .forceLink(graph.links)
-            .id((d) => d.id)
-            .distance(100)
-        )
-        .force("charge", d3.forceManyBody().strength(-200))
-        .force("center", d3.forceCenter(width / 2, height / 2));
-
-      svg
-        .append("defs")
-        .append("marker")
-        .attr("id", "arrowhead")
-        .attr("viewBox", "0 -5 10 10")
-        .attr("refX", 15) // Adjust to position the arrowhead correctly
-        .attr("refY", 0)
-        .attr("markerWidth", 6)
-        .attr("markerHeight", 6)
-        .attr("orient", "auto")
-        .append("path")
-        .attr("d", "M0,-5L10,0L0,5")
-        .attr("fill", "#999"); // Arrow color
-
-      const link = zoomGroup
-        .append("g")
-        .selectAll("line")
-        .data(graph.links)
-        .enter()
-        .append("line")
-        .attr("stroke-width", 2)
-        .attr("stroke", "#999")
-        .attr("marker-end", "url(#arrowhead)")
-        .attr(
-          "class",
-          (d) =>
-            `link-${id(d.source.id)}-${id(d.target.id)} link-${id(
-              d.target.id
-            )}-${id(d.source.id)}`
-        );
-
-      window.link = link;
+      const canvas = document.createElement("canvas");
+      canvas.width = width * devicePixelRatio;
+      canvas.height = height * devicePixelRatio;
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      container.appendChild(canvas);
+      const ctx = canvas.getContext("2d");
+      ctx.scale(devicePixelRatio, devicePixelRatio);
 
       const tooltip = d3
         .select("#container")
@@ -321,142 +292,193 @@
         .style("border-radius", "5px")
         .style("position", "absolute")
         .style("pointer-events", "none")
-        .style("padding", "5px");
+        .style("padding", "5px")
+        .style("font-size", "12px")
+        .style("max-width", "500px")
+        .style("z-index", "1000");
 
-      const node = zoomGroup
-        .append("g")
-        .selectAll("circle")
-        .data(graph.nodes)
-        .enter()
-        .append("g")
-        .attr("class", (d) => `node-${id(d.id)}`)
-        .attr("transform", (d) => `translate(${d.x},${d.y})`)
-        .call(
+      const cycleNodeSet = new Set(cycles.flat());
+      const showNames = document.querySelector("[name=showFileNames]")?.checked;
+
+      let transform = d3.zoomIdentity;
+      const nodeRadius = 4;
+
+      const nodeCount = graph.nodes.length;
+      const chargeStrength =
+        nodeCount > 5000 ? -30 : nodeCount > 1000 ? -80 : -200;
+      const linkDist = nodeCount > 5000 ? 20 : nodeCount > 1000 ? 50 : 100;
+      const alphaDecay = nodeCount > 5000 ? 0.05 : 0.0228;
+
+      const simulation = d3
+        .forceSimulation(graph.nodes)
+        .alphaDecay(alphaDecay)
+        .force(
+          "link",
           d3
-            .drag()
-            .on("start", (event, d) => {
-              if (!event.active) simulation.alphaTarget(0.3).restart();
-              d.fx = d.x;
-              d.fy = d.y;
-            })
-            .on("drag", (event, d) => {
-              d.fx = event.x;
-              d.fy = event.y;
-            })
-            .on("end", (event, d) => {
-              if (!event.active) simulation.alphaTarget(0);
-              d.fx = null;
-              d.fy = null;
-            })
-        );
+            .forceLink(graph.links)
+            .id((d) => d.id)
+            .distance(linkDist)
+        )
+        .force("charge", d3.forceManyBody().strength(chargeStrength))
+        .force("center", d3.forceCenter(width / 2, height / 2));
 
-      node
-        .append("circle")
-        .attr("r", 5)
-        .attr("fill", (d) => getColor(d.id))
-        .attr("stroke", "black")
-        .on("click", (event, d) => {
-          showFileInfo(d);
-        })
-        .on("mouseover", (event, d) => {
-          d3.selectAll(`.node-${id(d.id)}`)
-            .selectAll("circle")
-            .attr("fill", "red");
+      let hoveredNode = null;
+      let highlightedCycleNodes = new Set();
+      let highlightedCycleLinks = new Set();
 
-          d.cycles = cycles.filter((cycle) => cycle.some((n) => n === d.id));
+      function draw() {
+        ctx.save();
+        ctx.clearRect(0, 0, width, height);
+        ctx.translate(transform.x, transform.y);
+        ctx.scale(transform.k, transform.k);
 
-          tooltip.style("opacity", 1);
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = "#999";
+        ctx.lineWidth = 0.5;
+        for (const link of graph.links) {
+          const linkKey = link.source.id + ">" + link.target.id;
+          if (highlightedCycleLinks.has(linkKey)) continue;
+          ctx.beginPath();
+          ctx.moveTo(link.source.x, link.source.y);
+          ctx.lineTo(link.target.x, link.target.y);
+          ctx.stroke();
+        }
 
-          // Highlight connected links
-          // d3.selectAll(`.link-${btoa(d.id).replaceAll('=', '')}`).attr("stroke", "red");
+        if (highlightedCycleLinks.size > 0) {
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = "red";
+          ctx.lineWidth = 1.5;
+          for (const link of graph.links) {
+            const linkKey = link.source.id + ">" + link.target.id;
+            if (!highlightedCycleLinks.has(linkKey)) continue;
+            ctx.beginPath();
+            ctx.moveTo(link.source.x, link.source.y);
+            ctx.lineTo(link.target.x, link.target.y);
+            ctx.stroke();
+          }
+        }
 
-          d.cycles.forEach((cycle) => {
-            cycle.forEach((n, i) => {
-              const next = cycle[(i + 1) % cycle.length];
-              d3.selectAll(`.link-${id(n)}-${id(next)}`).attr("stroke", "red");
-              d3.selectAll(`.node-${id(n)}`)
-                .selectAll("circle")
-                .attr("fill", "red");
-            });
-          });
-        })
-        .on("mousemove", function (event, d) {
+        ctx.globalAlpha = 1;
+        for (const node of graph.nodes) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
+          if (highlightedCycleNodes.has(node.id)) {
+            ctx.fillStyle = "red";
+          } else {
+            ctx.fillStyle = getColor(node.id);
+          }
+          ctx.fill();
+          ctx.strokeStyle = hoveredNode === node ? "red" : "#333";
+          ctx.lineWidth = hoveredNode === node ? 2 : 0.5;
+          ctx.stroke();
+        }
+
+        if (showNames && transform.k > 1.5) {
+          ctx.fillStyle = "#333";
+          ctx.font = "3px sans-serif";
+          for (const node of graph.nodes) {
+            ctx.fillText(node.id, node.x + nodeRadius + 2, node.y + 1);
+          }
+        }
+
+        ctx.restore();
+      }
+
+      simulation.on("tick", draw);
+
+      function findNodeAt(mx, my) {
+        const [x, y] = transform.invert([mx, my]);
+        const r = nodeRadius / transform.k + 3;
+        for (let i = graph.nodes.length - 1; i >= 0; i--) {
+          const n = graph.nodes[i];
+          const dx = n.x - x,
+            dy = n.y - y;
+          if (dx * dx + dy * dy < r * r) return n;
+        }
+        return null;
+      }
+
+      d3.select(canvas).on("mousemove", (event) => {
+        const [mx, my] = d3.pointer(event);
+        const found = findNodeAt(mx, my);
+
+        if (found !== hoveredNode) {
+          hoveredNode = found;
+          highlightedCycleNodes = new Set();
+          highlightedCycleLinks = new Set();
+
+          if (found) {
+            canvas.style.cursor = "pointer";
+            const nodeCycles = cycles.filter((c) => c.includes(found.id));
+            found.cycles = nodeCycles;
+            for (const cycle of nodeCycles) {
+              for (let i = 0; i < cycle.length; i++) {
+                highlightedCycleNodes.add(cycle[i]);
+                const next = cycle[(i + 1) % cycle.length];
+                highlightedCycleLinks.add(cycle[i] + ">" + next);
+              }
+            }
+            tooltip
+              .style("opacity", 1)
+              .html(`<b>${found.id}</b><br>Cycles: ${nodeCycles.length}`)
+              .style("left", event.pageX + 10 + "px")
+              .style("top", event.pageY + 10 + "px");
+          } else {
+            canvas.style.cursor = "default";
+            tooltip.style("opacity", 0);
+          }
+          draw();
+        } else if (found) {
           tooltip
-            .html(
-              `
-              File: <code>${d.id}</code><br>
-              Cycles (${d.cycles.length}) (${
-                new Set(d.cycles.flat()).size
-              } files):<br>
-                  ${d.cycles
-                    .map(
-                      (cycle, i) => `
-                  <p>
-                      Cycle #${i + 1} (${cycle.length} files):
-                      <pre>${cycle.join("<br>->")}<br>->${cycle[0]}</pre>
-                  </p>`
-                    )
-                    .join("<br>")}`
-            )
-            .style("left", event.pageX + "px")
-            .style("top", event.pageY + "px");
-        })
-        .on("mouseout", (event, d) => {
-          d3.selectAll(`.node-${id(d.id)}`)
-            .selectAll("circle")
-            .attr("fill", (d) => getColor(d.id));
-
-          tooltip.style("opacity", 0);
-
-          // Reset connected links
-          // d3.selectAll(`.link-${btoa(d.id).replaceAll('=', '')}`).attr("stroke", "#999");
-
-          d.cycles.forEach((cycle) => {
-            cycle.forEach((n, i) => {
-              const next = cycle[(i + 1) % cycle.length];
-              d3.selectAll(`.link-${id(n)}-${id(next)}`).attr("stroke", "#999");
-              d3.selectAll(`.node-${id(n)}`)
-                .selectAll("circle")
-                .attr("fill", (ds) => getColor(ds.id));
-            });
-          });
-        });
-
-      node
-        .append("text")
-        .attr("dx", "5")
-        .attr("visibility", "hidden")
-        .text((d) => d.id);
-
-      window.node = node;
-
-      // Add zoom and pan behavior
-      const zoom = d3
-        .zoom()
-        .scaleExtent([0.1, 10]) // Set zoom scale limits
-        .on("zoom", (event) => {
-          zoomGroup.attr("transform", event.transform); // Apply zoom and pan transformations
-        });
-
-      svg.call(zoom); // Enable zoom on the SVG element
-
-      simulation.on("tick", () => {
-        link
-          .attr("x1", (d) => d.source.x)
-          .attr("y1", (d) => d.source.y)
-          .attr("x2", (d) => d.target.x)
-          .attr("y2", (d) => d.target.y);
-
-        node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+            .style("left", event.pageX + 10 + "px")
+            .style("top", event.pageY + 10 + "px");
+        }
       });
 
-      // Handle window resizing
-      window.addEventListener("resize", () => {
-        const newWidth = window.innerWidth;
-        const newHeight = window.innerHeight;
-        svg.attr("viewBox", `0 0 ${newWidth} ${newHeight}`);
-        simulation.force("center", d3.forceCenter(newWidth / 2, newHeight / 2));
+      d3.select(canvas).on("click", (event) => {
+        const [mx, my] = d3.pointer(event);
+        const found = findNodeAt(mx, my);
+        if (found) showFileInfo(found);
       });
+
+      d3.select(canvas).call(
+        d3
+          .drag()
+          .subject((event) => {
+            const [mx, my] = d3.pointer(event);
+            const found = findNodeAt(mx, my);
+            if (found) {
+              found.fx = found.x;
+              found.fy = found.y;
+              return found;
+            }
+            return null;
+          })
+          .on("start", (event) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+          })
+          .on("drag", (event) => {
+            event.subject.fx = transform.invertX(event.sourceEvent.offsetX);
+            event.subject.fy = transform.invertY(event.sourceEvent.offsetY);
+          })
+          .on("end", (event) => {
+            if (!event.active) simulation.alphaTarget(0);
+            event.subject.fx = null;
+            event.subject.fy = null;
+          })
+      );
+
+      d3.select(canvas).call(
+        d3
+          .zoom()
+          .scaleExtent([0.02, 20])
+          .on("zoom", (event) => {
+            transform = event.transform;
+            draw();
+          })
+      );
+
+      window.node = null;
     }
 
     function updateGraph() {
@@ -473,11 +495,18 @@
       const filter = (graph) => {
         let keys = Object.keys(graph);
 
-        // Apply file type filter
         keys = keys.filter((k) => checkedTypes.includes(getFileType(k)));
 
-        // Apply display filter
-        if (linkDisplay === "orphans") {
+        if (linkDisplay === "connected") {
+          const hasOutgoing = new Set(keys.filter((k) => graph[k].length > 0));
+          const hasIncoming = new Set();
+          for (const k of keys) {
+            for (const dep of graph[k]) {
+              hasIncoming.add(dep);
+            }
+          }
+          keys = keys.filter((k) => hasOutgoing.has(k) || hasIncoming.has(k));
+        } else if (linkDisplay === "orphans") {
           keys = keys.filter((k) => report.orphans.includes(k));
         } else if (linkDisplay === "cycles") {
           keys = keys.filter((k) =>
@@ -513,14 +542,6 @@
         validCycles.length.toLocaleString();
 
       renderGraph(data, validCycles);
-
-      // Re-apply show file names setting if needed
-      const showNames = document.querySelector("[name=showFileNames]").checked;
-      if (window.node) {
-        window.node
-          .select("text")
-          .attr("visibility", showNames ? "visible" : "hidden");
-      }
     }
 
     if (window.report) {
@@ -536,7 +557,7 @@
           <div class="form-check">
             <input class="form-check-input file-type-checkbox" type="checkbox" value="${type}" id="type-${id(
           type
-        )}" checked>
+        )}" ${type === ".rb" ? "checked" : ""}>
             <label class="form-check-label d-flex align-items-center" for="type-${id(
               type
             )}">
@@ -575,15 +596,8 @@
       control.onchange = updateGraph;
     });
 
-    document.querySelector("[name=showFileNames]").onchange = (e) => {
-      const isEnabled = e.target.checked;
-      if (window.node) {
-        if (isEnabled) {
-          window.node.select("text").attr("visibility", "visible");
-        } else {
-          window.node.select("text").attr("visibility", "hidden");
-        }
-      }
+    document.querySelector("[name=showFileNames]").onchange = () => {
+      updateGraph();
     };
   </script>
 </html>
