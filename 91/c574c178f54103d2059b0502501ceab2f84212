@@ -1,0 +1,19 @@
+README.md
+  s_382574073cf142::t_600465ff9d91fb 3,7-13,16-44,46,48-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "91c574c178f54103d2059b0502501ceab2f84212",
+  "prompts": {},
+  "sessions": {
+    "s_382574073cf142": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_149e4e48fffe8kfiqX0hEq3k1a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "himanshu <139762633+hpanwar09@users.noreply.github.com>"
+    }
+  }
+}
