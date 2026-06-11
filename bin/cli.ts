@@ -44,10 +44,10 @@ async function main() {
 
     firstScript.parentElement!.insertBefore(dataTag, firstScript);
 
-    Deno.writeFileSync(
-      "edge_analysis.html",
-      encoder.encode(document.documentElement!.innerHTML)
-    );
+    const output = `<!DOCTYPE html><html lang="en">${
+      document.documentElement!.innerHTML
+    }</html>`;
+    Deno.writeFileSync("edge_analysis.html", encoder.encode(output));
   }
 
   if (args.open) {
