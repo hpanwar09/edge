@@ -251,17 +251,15 @@
     function transformToD3Format(report, filter) {
       const graph = filter(report.graph);
       const files = Object.keys(graph);
+      const fileSet = new Set(files);
       cachedFiles = files;
       const nodes = files.map((file) => ({ id: file }));
-      const links = files.flatMap((file) =>
-        graph[file]
-          .filter((f) => files.includes(f))
-          .map((target) => ({
-            source: file,
-            target: target,
-          }))
-      );
-
+      const links = [];
+      for (const file of files) {
+        for (const target of graph[file]) {
+          if (fileSet.has(target)) links.push({ source: file, target });
+        }
+      }
       return { nodes, links };
     }
 
@@ -326,50 +324,100 @@
       let highlightedCycleNodes = new Set();
       let highlightedCycleLinks = new Set();
 
+      const nodeColorCache = new Map();
+      for (const node of graph.nodes) {
+        nodeColorCache.set(node, getColor(node.id));
+      }
+
+      const colorGroups = new Map();
+      for (const node of graph.nodes) {
+        const c = nodeColorCache.get(node);
+        if (!colorGroups.has(c)) colorGroups.set(c, []);
+        colorGroups.get(c).push(node);
+      }
+
+      let drawScheduled = false;
+      function scheduleDraw() {
+        if (drawScheduled) return;
+        drawScheduled = true;
+        requestAnimationFrame(() => {
+          drawScheduled = false;
+          draw();
+        });
+      }
+
       function draw() {
         ctx.save();
         ctx.clearRect(0, 0, width, height);
         ctx.translate(transform.x, transform.y);
         ctx.scale(transform.k, transform.k);
 
-        ctx.globalAlpha = 0.3;
+        ctx.globalAlpha = 0.15;
         ctx.strokeStyle = "#999";
         ctx.lineWidth = 0.5;
+        ctx.beginPath();
         for (const link of graph.links) {
-          const linkKey = link.source.id + ">" + link.target.id;
-          if (highlightedCycleLinks.has(linkKey)) continue;
-          ctx.beginPath();
+          if (
+            highlightedCycleLinks.size > 0 &&
+            highlightedCycleLinks.has(link.source.id + ">" + link.target.id)
+          )
+            continue;
           ctx.moveTo(link.source.x, link.source.y);
           ctx.lineTo(link.target.x, link.target.y);
-          ctx.stroke();
         }
+        ctx.stroke();
 
         if (highlightedCycleLinks.size > 0) {
           ctx.globalAlpha = 1;
           ctx.strokeStyle = "red";
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
           for (const link of graph.links) {
-            const linkKey = link.source.id + ">" + link.target.id;
-            if (!highlightedCycleLinks.has(linkKey)) continue;
-            ctx.beginPath();
+            if (
+              !highlightedCycleLinks.has(link.source.id + ">" + link.target.id)
+            )
+              continue;
             ctx.moveTo(link.source.x, link.source.y);
             ctx.lineTo(link.target.x, link.target.y);
-            ctx.stroke();
           }
+          ctx.stroke();
         }
 
         ctx.globalAlpha = 1;
-        for (const node of graph.nodes) {
+        ctx.lineWidth = 0.3;
+        ctx.strokeStyle = "#333";
+        const tau = 2 * Math.PI;
+        for (const [color, nodes] of colorGroups) {
+          ctx.fillStyle = color;
           ctx.beginPath();
-          ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
-          if (highlightedCycleNodes.has(node.id)) {
-            ctx.fillStyle = "red";
-          } else {
-            ctx.fillStyle = getColor(node.id);
+          for (const n of nodes) {
+            if (highlightedCycleNodes.has(n.id)) continue;
+            ctx.moveTo(n.x + nodeRadius, n.y);
+            ctx.arc(n.x, n.y, nodeRadius, 0, tau);
           }
           ctx.fill();
-          ctx.strokeStyle = hoveredNode === node ? "red" : "#333";
-          ctx.lineWidth = hoveredNode === node ? 2 : 0.5;
+          ctx.stroke();
+        }
+
+        if (highlightedCycleNodes.size > 0) {
+          ctx.fillStyle = "red";
+          ctx.beginPath();
+          for (const node of graph.nodes) {
+            if (!highlightedCycleNodes.has(node.id)) continue;
+            ctx.moveTo(node.x + nodeRadius, node.y);
+            ctx.arc(node.x, node.y, nodeRadius, 0, tau);
+          }
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        if (hoveredNode) {
+          ctx.fillStyle = "red";
+          ctx.strokeStyle = "red";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(hoveredNode.x, hoveredNode.y, nodeRadius + 1, 0, tau);
+          ctx.fill();
           ctx.stroke();
         }
 
@@ -384,18 +432,40 @@
         ctx.restore();
       }
 
-      simulation.on("tick", draw);
+      simulation.on("tick", scheduleDraw);
+
+      const quadtree = d3
+        .quadtree()
+        .x((d) => d.x)
+        .y((d) => d.y)
+        .addAll(graph.nodes);
+
+      simulation.on("tick.quadtree", () => {
+        quadtree.visitAfter(() => {});
+        quadtree.removeAll(graph.nodes).addAll(graph.nodes);
+      });
 
       function findNodeAt(mx, my) {
         const [x, y] = transform.invert([mx, my]);
-        const r = nodeRadius / transform.k + 3;
-        for (let i = graph.nodes.length - 1; i >= 0; i--) {
-          const n = graph.nodes[i];
-          const dx = n.x - x,
-            dy = n.y - y;
-          if (dx * dx + dy * dy < r * r) return n;
-        }
-        return null;
+        const r = nodeRadius / transform.k + 4;
+        let found = null;
+        let minDist = r * r;
+        quadtree.visit((qnode, x0, y0, x1, y1) => {
+          if (x - r > x1 || x + r < x0 || y - r > y1 || y + r < y0) return true;
+          if (!qnode.length) {
+            let d = qnode;
+            do {
+              const dx = d.data.x - x,
+                dy = d.data.y - y;
+              const dist = dx * dx + dy * dy;
+              if (dist < minDist) {
+                minDist = dist;
+                found = d.data;
+              }
+            } while ((d = d.next));
+          }
+        });
+        return found;
       }
 
       d3.select(canvas).on("mousemove", (event) => {
@@ -427,7 +497,7 @@
             canvas.style.cursor = "default";
             tooltip.style("opacity", 0);
           }
-          draw();
+          scheduleDraw();
         } else if (found) {
           tooltip
             .style("left", event.pageX + 10 + "px")
@@ -474,7 +544,7 @@
           .scaleExtent([0.02, 20])
           .on("zoom", (event) => {
             transform = event.transform;
-            draw();
+            scheduleDraw();
           })
       );
 
@@ -552,12 +622,9 @@
       let typesHtml = "";
 
       const types = Object.keys(report.fileTypes || {}).sort();
-      const preferredOrder = [".rb", ".js", ".ts", ".jsx", ".tsx", ".slim"];
-      const defaultType =
-        preferredOrder.find((t) => types.includes(t)) ||
-        types.sort(
-          (a, b) => (report.fileTypes[b] || 0) - (report.fileTypes[a] || 0)
-        )[0];
+      const defaultType = types.sort(
+        (a, b) => (report.fileTypes[b] || 0) - (report.fileTypes[a] || 0)
+      )[0];
 
       types.forEach((type) => {
         const count = report.fileTypes[type];
