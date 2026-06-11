@@ -1,0 +1,20 @@
+view-report.html
+  s_2099ecd19eb969::t_01517ec8ed3277 552-557,562,567
+  s_2099ecd19eb969::t_4cf3fb7efc24f9 70-71,73-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f538fe645d37f6121a58ff11fc64e10be5da3edf",
+  "prompts": {},
+  "sessions": {
+    "s_2099ecd19eb969": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ses_149e4e48fffe8kfiqX0hEq3k1a",
+        "model": "unknown"
+      },
+      "human_author": "himanshu <139762633+hpanwar09@users.noreply.github.com>"
+    }
+  }
+}
