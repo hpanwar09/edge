@@ -56,23 +56,23 @@
                   class="form-check-input"
                   type="radio"
                   name="graphDisplay"
-                  value="connected"
-                  id="connected"
+                  value="cycles"
+                  id="cycles"
                   checked
                 />
-                <label class="form-check-label" for="connected"
-                  >Connected Only</label
-                >
+                <label class="form-check-label" for="cycles">Cycles Only</label>
               </div>
               <div class="form-check">
                 <input
                   class="form-check-input"
                   type="radio"
                   name="graphDisplay"
-                  value="cycles"
-                  id="cycles"
+                  value="connected"
+                  id="connected"
                 />
-                <label class="form-check-label" for="cycles">Cycles Only</label>
+                <label class="form-check-label" for="connected"
+                  >Connected Only</label
+                >
               </div>
               <div class="form-check">
                 <input
@@ -549,15 +549,22 @@
       let typesHtml = "";
 
       const types = Object.keys(report.fileTypes || {}).sort();
+      const preferredOrder = [".rb", ".js", ".ts", ".jsx", ".tsx", ".slim"];
+      const defaultType =
+        preferredOrder.find((t) => types.includes(t)) ||
+        types.sort(
+          (a, b) => (report.fileTypes[b] || 0) - (report.fileTypes[a] || 0)
+        )[0];
 
       types.forEach((type) => {
         const count = report.fileTypes[type];
         const color = fileTypeColors[type] || "#6B7280";
+        const isDefault = type === defaultType;
         typesHtml += `
           <div class="form-check">
             <input class="form-check-input file-type-checkbox" type="checkbox" value="${type}" id="type-${id(
           type
-        )}" ${type === ".rb" ? "checked" : ""}>
+        )}" ${isDefault ? "checked" : ""}>
             <label class="form-check-label d-flex align-items-center" for="type-${id(
               type
             )}">
