@@ -14,11 +14,13 @@
       body {
         padding: 0;
         margin: 0;
+        height: 100%;
+        overflow: hidden;
       }
 
       #container {
         width: 100%;
-        height: 100%;
+        height: 70%;
         overflow: hidden;
         position: relative;
       }
@@ -29,21 +31,32 @@
         position: fixed;
         left: 0;
         bottom: 0;
+        overflow: hidden;
       }
 
       #file-info {
         height: 100%;
         overflow: auto;
       }
-
-      svg {
-        width: 100%;
-        height: 100%;
+      
+      #tooltip {
+        position: absolute;
+        pointer-events: none;
+        background-color: white;
+        border: 2px solid #333;
+        border-radius: 5px;
+        padding: 5px;
+        font-size: 12px;
+        max-width: 500px;
+        z-index: 1000;
+        display: none;
       }
     </style>
   </head>
   <body>
-    <div id="container"></div>
+    <div id="container">
+      <div id="tooltip"></div>
+    </div>
     <div id="info-bar" class="bg-light p-4 shadow">
       <div class="row h-100">
         <div class="col-2">
@@ -84,18 +97,6 @@
                 />
                 <label class="form-check-label" for="full"
                   >Full Graph (slow)</label
-                >
-              </div>
-              <div class="form-check">
-                <input
-                  class="form-check-input"
-                  type="radio"
-                  name="graphDisplay"
-                  value="orphans"
-                  id="orphans"
-                />
-                <label class="form-check-label" for="orphans"
-                  >Orphans Only</label
                 >
               </div>
             </div>
@@ -165,13 +166,27 @@
       </div>
     </div>
   </body>
-  <script type="module">
-    import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+  
+  <script src="https://cdn.jsdelivr.net/npm/graphology@0.26.0/dist/graphology.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/dist/graphology-library.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/3.0.0/sigma.min.js"></script>
 
+  <script>
     const id = (nodeId) => btoa(nodeId).replaceAll("=", "");
 
     let cachedFiles = [];
     window.currentCycles = [];
+    
+    let graph = null;
+    let sigmaInstance = null;
+    let isFirstRender = true;
+
+    // Hover state
+    const state = {
+      hoveredNode: null,
+      highlightedNodes: new Set(),
+      highlightedEdges: new Set(),
+    };
 
     const getFileType = (filename) => {
       const match = filename.match(/\.[^/.]+$/);
@@ -194,6 +209,11 @@
 
     function search(searchTerm) {
       const searchResultList = document.querySelector("#search-result");
+      if (!searchTerm) {
+        searchResultList.innerHTML = "";
+        return;
+      }
+
       const potentialMatches = cachedFiles.filter((file) =>
         file.includes(searchTerm)
       );
@@ -207,7 +227,20 @@
         .querySelectorAll(".search-result")
         .forEach(
           (result) =>
-            (result.onclick = (e) => showFileInfo({ id: e.target.value }))
+            (result.onclick = (e) => {
+              const nodeId = e.target.value;
+              showFileInfo({ id: nodeId });
+              if (sigmaInstance && graph && graph.hasNode(nodeId)) {
+                const nodePos = sigmaInstance.getNodeDisplayData(nodeId);
+                if (nodePos) {
+                  sigmaInstance.getCamera().animate({
+                    x: nodePos.x,
+                    y: nodePos.y,
+                    ratio: 0.1,
+                  }, { duration: 500 });
+                }
+              }
+            })
         );
     }
 
@@ -248,313 +281,102 @@
       cycleList.innerHTML = listHTML;
     }
 
-    function transformToD3Format(report, filter) {
-      const graph = filter(report.graph);
-      const files = Object.keys(graph);
-      const fileSet = new Set(files);
-      cachedFiles = files;
-      const nodes = files.map((file) => ({ id: file }));
-      const links = [];
-      for (const file of files) {
-        for (const target of graph[file]) {
-          if (fileSet.has(target)) links.push({ source: file, target });
-        }
-      }
-      return { nodes, links };
-    }
-
-    function renderGraph(graph, cycles) {
-      const width = window.innerWidth;
-      const height = window.innerHeight * 0.7;
-
+    function initSigma() {
+      graph = new graphology.Graph();
       const container = document.getElementById("container");
-      container.innerHTML = "";
+      const tooltip = document.getElementById("tooltip");
 
-      const canvas = document.createElement("canvas");
-      canvas.width = width * devicePixelRatio;
-      canvas.height = height * devicePixelRatio;
-      canvas.style.width = width + "px";
-      canvas.style.height = height + "px";
-      container.appendChild(canvas);
-      const ctx = canvas.getContext("2d");
-      ctx.scale(devicePixelRatio, devicePixelRatio);
-
-      const tooltip = d3
-        .select("#container")
-        .append("div")
-        .style("opacity", 0)
-        .attr("class", "tooltip")
-        .style("background-color", "white")
-        .style("border", "solid")
-        .style("border-width", "2px")
-        .style("border-radius", "5px")
-        .style("position", "absolute")
-        .style("pointer-events", "none")
-        .style("padding", "5px")
-        .style("font-size", "12px")
-        .style("max-width", "500px")
-        .style("z-index", "1000");
-
-      const cycleNodeSet = new Set(cycles.flat());
-      const isShowNames = () =>
-        document.querySelector("[name=showFileNames]")?.checked;
-
-      let transform = d3.zoomIdentity;
-      const nodeRadius = 4;
-
-      const nodeCount = graph.nodes.length;
-      const chargeStrength =
-        nodeCount > 5000 ? -30 : nodeCount > 1000 ? -80 : -200;
-      const linkDist = nodeCount > 5000 ? 20 : nodeCount > 1000 ? 50 : 100;
-      const alphaDecay = nodeCount > 5000 ? 0.05 : 0.0228;
-
-      const simulation = d3
-        .forceSimulation(graph.nodes)
-        .alphaDecay(alphaDecay)
-        .force(
-          "link",
-          d3
-            .forceLink(graph.links)
-            .id((d) => d.id)
-            .distance(linkDist)
-        )
-        .force("charge", d3.forceManyBody().strength(chargeStrength))
-        .force("center", d3.forceCenter(width / 2, height / 2));
-
-      let hoveredNode = null;
-      let highlightedCycleNodes = new Set();
-      let highlightedCycleLinks = new Set();
-
-      const nodeColorCache = new Map();
-      for (const node of graph.nodes) {
-        nodeColorCache.set(node, getColor(node.id));
-      }
-
-      const colorGroups = new Map();
-      for (const node of graph.nodes) {
-        const c = nodeColorCache.get(node);
-        if (!colorGroups.has(c)) colorGroups.set(c, []);
-        colorGroups.get(c).push(node);
-      }
-
-      let drawScheduled = false;
-      function scheduleDraw() {
-        if (drawScheduled) return;
-        drawScheduled = true;
-        requestAnimationFrame(() => {
-          drawScheduled = false;
-          draw();
-        });
-      }
-
-      function draw() {
-        ctx.save();
-        ctx.clearRect(0, 0, width, height);
-        ctx.translate(transform.x, transform.y);
-        ctx.scale(transform.k, transform.k);
-
-        ctx.globalAlpha = 0.15;
-        ctx.strokeStyle = "#999";
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        for (const link of graph.links) {
-          if (
-            highlightedCycleLinks.size > 0 &&
-            highlightedCycleLinks.has(link.source.id + ">" + link.target.id)
-          )
-            continue;
-          ctx.moveTo(link.source.x, link.source.y);
-          ctx.lineTo(link.target.x, link.target.y);
-        }
-        ctx.stroke();
-
-        if (highlightedCycleLinks.size > 0) {
-          ctx.globalAlpha = 1;
-          ctx.strokeStyle = "red";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          for (const link of graph.links) {
-            if (
-              !highlightedCycleLinks.has(link.source.id + ">" + link.target.id)
-            )
-              continue;
-            ctx.moveTo(link.source.x, link.source.y);
-            ctx.lineTo(link.target.x, link.target.y);
-          }
-          ctx.stroke();
-        }
-
-        ctx.globalAlpha = 1;
-        ctx.lineWidth = 0.3;
-        ctx.strokeStyle = "#333";
-        const tau = 2 * Math.PI;
-        for (const [color, nodes] of colorGroups) {
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          for (const n of nodes) {
-            if (highlightedCycleNodes.has(n.id)) continue;
-            ctx.moveTo(n.x + nodeRadius, n.y);
-            ctx.arc(n.x, n.y, nodeRadius, 0, tau);
-          }
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        if (highlightedCycleNodes.size > 0) {
-          ctx.fillStyle = "red";
-          ctx.beginPath();
-          for (const node of graph.nodes) {
-            if (!highlightedCycleNodes.has(node.id)) continue;
-            ctx.moveTo(node.x + nodeRadius, node.y);
-            ctx.arc(node.x, node.y, nodeRadius, 0, tau);
-          }
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        if (hoveredNode) {
-          ctx.fillStyle = "red";
-          ctx.strokeStyle = "red";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(hoveredNode.x, hoveredNode.y, nodeRadius + 1, 0, tau);
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        if (isShowNames()) {
-          ctx.fillStyle = "#333";
-          const fontSize = Math.max(3, 10 / transform.k);
-          ctx.font = `${fontSize}px sans-serif`;
-          for (const node of graph.nodes) {
-            ctx.fillText(node.id, node.x + nodeRadius + 2, node.y + 1);
-          }
-        }
-
-        ctx.restore();
-      }
-
-      simulation.on("tick", scheduleDraw);
-
-      const quadtree = d3
-        .quadtree()
-        .x((d) => d.x)
-        .y((d) => d.y)
-        .addAll(graph.nodes);
-
-      simulation.on("tick.quadtree", () => {
-        quadtree.visitAfter(() => {});
-        quadtree.removeAll(graph.nodes).addAll(graph.nodes);
+      sigmaInstance = new Sigma(graph, container, {
+        renderLabels: document.querySelector("[name=showFileNames]")?.checked || false,
+        labelSize: 12,
+        labelThreshold: 7,
+        minCameraRatio: 0.01,
+        maxCameraRatio: 20,
+        defaultEdgeColor: "#cccccc",
+        defaultEdgeType: "arrow",
+        labelRenderedSizeThreshold: 5,
       });
 
-      function findNodeAt(mx, my) {
-        const [x, y] = transform.invert([mx, my]);
-        const r = nodeRadius / transform.k + 4;
-        let found = null;
-        let minDist = r * r;
-        quadtree.visit((qnode, x0, y0, x1, y1) => {
-          if (x - r > x1 || x + r < x0 || y - r > y1 || y + r < y0) return true;
-          if (!qnode.length) {
-            let d = qnode;
-            do {
-              const dx = d.data.x - x,
-                dy = d.data.y - y;
-              const dist = dx * dx + dy * dy;
-              if (dist < minDist) {
-                minDist = dist;
-                found = d.data;
-              }
-            } while ((d = d.next));
-          }
-        });
-        return found;
-      }
+      sigmaInstance.on("enterNode", (e) => {
+        const node = e.node;
+        state.hoveredNode = node;
+        state.highlightedNodes = new Set();
+        state.highlightedEdges = new Set();
 
-      d3.select(canvas).on("mousemove", (event) => {
-        const [mx, my] = d3.pointer(event);
-        const found = findNodeAt(mx, my);
-
-        if (found !== hoveredNode) {
-          hoveredNode = found;
-          highlightedCycleNodes = new Set();
-          highlightedCycleLinks = new Set();
-
-          if (found) {
-            canvas.style.cursor = "pointer";
-            const nodeCycles = cycles.filter((c) => c.includes(found.id));
-            found.cycles = nodeCycles;
-            for (const cycle of nodeCycles) {
-              for (let i = 0; i < cycle.length; i++) {
-                highlightedCycleNodes.add(cycle[i]);
-                const next = cycle[(i + 1) % cycle.length];
-                highlightedCycleLinks.add(cycle[i] + ">" + next);
-              }
+        const nodeCycles = window.currentCycles.filter((c) => c.includes(node));
+        for (const cycle of nodeCycles) {
+          for (let i = 0; i < cycle.length; i++) {
+            state.highlightedNodes.add(cycle[i]);
+            const next = cycle[(i + 1) % cycle.length];
+            if (graph.hasEdge(cycle[i], next)) {
+              state.highlightedEdges.add(graph.edge(cycle[i], next));
             }
-            tooltip
-              .style("opacity", 1)
-              .html(`<b>${found.id}</b><br>Cycles: ${nodeCycles.length}`)
-              .style("left", event.pageX + 10 + "px")
-              .style("top", event.pageY + 10 + "px");
+          }
+        }
+        state.highlightedNodes.add(node);
+
+        tooltip.innerHTML = `<b>${node}</b><br>Cycles: ${nodeCycles.length}`;
+        tooltip.style.display = "block";
+        
+        sigmaInstance.refresh();
+      });
+
+      sigmaInstance.on("leaveNode", () => {
+        state.hoveredNode = null;
+        state.highlightedNodes = new Set();
+        state.highlightedEdges = new Set();
+        
+        tooltip.style.display = "none";
+        sigmaInstance.refresh();
+      });
+
+      container.addEventListener("mousemove", (e) => {
+        if (state.hoveredNode) {
+          tooltip.style.left = e.pageX + 15 + "px";
+          tooltip.style.top = e.pageY + 15 + "px";
+        }
+      });
+
+      sigmaInstance.on("clickNode", (e) => {
+        showFileInfo({ id: e.node });
+      });
+
+      sigmaInstance.setSetting("nodeReducer", (node, data) => {
+        const res = { ...data };
+        if (state.hoveredNode) {
+          if (state.highlightedNodes.has(node)) {
+            res.color = "red";
+            res.zIndex = 1;
           } else {
-            canvas.style.cursor = "default";
-            tooltip.style("opacity", 0);
+            res.color = "#eeeeee";
+            res.zIndex = 0;
           }
-          scheduleDraw();
-        } else if (found) {
-          tooltip
-            .style("left", event.pageX + 10 + "px")
-            .style("top", event.pageY + 10 + "px");
         }
+        return res;
       });
 
-      d3.select(canvas).on("click", (event) => {
-        const [mx, my] = d3.pointer(event);
-        const found = findNodeAt(mx, my);
-        if (found) showFileInfo(found);
+      sigmaInstance.setSetting("edgeReducer", (edge, data) => {
+        const res = { ...data };
+        if (state.hoveredNode) {
+          if (state.highlightedEdges.has(edge)) {
+            res.color = "red";
+            res.size = 2;
+            res.zIndex = 1;
+          } else {
+            res.color = "#eeeeee";
+            res.hidden = true;
+          }
+        }
+        return res;
       });
-
-      d3.select(canvas).call(
-        d3
-          .drag()
-          .subject((event) => {
-            const [mx, my] = d3.pointer(event);
-            const found = findNodeAt(mx, my);
-            if (found) {
-              found.fx = found.x;
-              found.fy = found.y;
-              return found;
-            }
-            return null;
-          })
-          .on("start", (event) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-          })
-          .on("drag", (event) => {
-            event.subject.fx = transform.invertX(event.sourceEvent.offsetX);
-            event.subject.fy = transform.invertY(event.sourceEvent.offsetY);
-          })
-          .on("end", (event) => {
-            if (!event.active) simulation.alphaTarget(0);
-            event.subject.fx = null;
-            event.subject.fy = null;
-          })
-      );
-
-      d3.select(canvas).call(
-        d3
-          .zoom()
-          .scaleExtent([0.02, 20])
-          .on("zoom", (event) => {
-            transform = event.transform;
-            scheduleDraw();
-          })
-      );
-
-      window.node = null;
     }
 
     function updateGraph() {
       if (!window.report) return;
+
+      if (!sigmaInstance) {
+        initSigma();
+      }
 
       const checkedTypes = Array.from(
         document.querySelectorAll(".file-type-checkbox:checked")
@@ -564,25 +386,26 @@
         "[name=graphDisplay]:checked"
       ).value;
 
-      const filter = (graph) => {
-        let keys = Object.keys(graph);
+      // Reset Sigma render labels
+      sigmaInstance.setSetting("renderLabels", document.querySelector("[name=showFileNames]").checked);
+
+      const filter = (g) => {
+        let keys = Object.keys(g);
 
         keys = keys.filter((k) => checkedTypes.includes(getFileType(k)));
 
         if (linkDisplay === "connected") {
           const filteredSet = new Set(keys);
           const hasOutgoing = new Set(
-            keys.filter((k) => graph[k].some((dep) => filteredSet.has(dep)))
+            keys.filter((k) => g[k].some((dep) => filteredSet.has(dep)))
           );
           const hasIncoming = new Set();
           for (const k of keys) {
-            for (const dep of graph[k]) {
+            for (const dep of g[k]) {
               if (filteredSet.has(dep)) hasIncoming.add(dep);
             }
           }
           keys = keys.filter((k) => hasOutgoing.has(k) || hasIncoming.has(k));
-        } else if (linkDisplay === "orphans") {
-          keys = keys.filter((k) => report.orphans.includes(k));
         } else if (linkDisplay === "cycles") {
           keys = keys.filter((k) =>
             report.cycles.some((cycle) => cycle.includes(k))
@@ -592,31 +415,61 @@
         return keys.reduce(
           (obj, k) => ({
             ...obj,
-            [k]: graph[k],
+            [k]: g[k],
           }),
           {}
         );
       };
 
-      const data = transformToD3Format(report, filter);
+      const filteredGraphData = filter(report.graph);
+      const files = Object.keys(filteredGraphData);
+      const fileSet = new Set(files);
+      cachedFiles = files;
 
-      // Filter cycles to only include those where ALL nodes are present
-      const validFiles = new Set(data.nodes.map((n) => n.id));
+      graph.clear();
+
       const validCycles = report.cycles.filter((c) =>
-        c.every((n) => validFiles.has(n))
+        c.every((n) => fileSet.has(n))
       );
-
       window.currentCycles = validCycles;
 
-      // Update stats
-      document.getElementById("stat-files").innerText =
-        data.nodes.length.toLocaleString();
-      document.getElementById("stat-edges").innerText =
-        data.links.length.toLocaleString();
-      document.getElementById("stat-cycles").innerText =
-        validCycles.length.toLocaleString();
+      for (const filePath of files) {
+        graph.addNode(filePath, {
+          label: filePath,
+          x: Math.random(),
+          y: Math.random(),
+          size: 3,
+          color: getColor(filePath),
+        });
+      }
 
-      renderGraph(data, validCycles);
+      for (const source of files) {
+        for (const target of filteredGraphData[source]) {
+          if (fileSet.has(target) && !graph.hasEdge(source, target)) {
+            graph.addEdge(source, target, { color: "#cccccc", type: "arrow" });
+          }
+        }
+      }
+
+      document.getElementById("stat-files").innerText = graph.order.toLocaleString();
+      document.getElementById("stat-edges").innerText = graph.size.toLocaleString();
+      document.getElementById("stat-cycles").innerText = validCycles.length.toLocaleString();
+
+      if (graph.order > 0) {
+        const iterations = isFirstRender ? 100 : 50;
+        isFirstRender = false;
+        const fa2Settings = graphologyLibrary.layoutForceAtlas2.inferSettings(graph);
+        graphologyLibrary.layoutForceAtlas2.assign(graph, {
+          iterations: iterations,
+          settings: { ...fa2Settings, barnesHutOptimize: true },
+        });
+      }
+
+      sigmaInstance.refresh();
+      // Zoom to fit all nodes
+      if (graph.order > 0) {
+        sigmaInstance.getCamera().animatedReset({ duration: 500 });
+      }
     }
 
     if (window.report) {
