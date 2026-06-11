@@ -1,0 +1,19 @@
+view-report.html
+  s_2099ecd19eb969::t_2c898e708d0d02 501-504,508
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3a3ed8cee83f545990c76c792d07ff94b74200e6",
+  "prompts": {},
+  "sessions": {
+    "s_2099ecd19eb969": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ses_149e4e48fffe8kfiqX0hEq3k1a",
+        "model": "unknown"
+      },
+      "human_author": "himanshu <139762633+hpanwar09@users.noreply.github.com>"
+    }
+  }
+}
