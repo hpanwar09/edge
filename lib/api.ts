@@ -24,9 +24,11 @@ export class Edge {
     });
     const { graph, fileTypes } = await scanner.scan();
 
+    const { connectedGraph, orphanCount } = this.separateOrphans(graph);
+
     const report: EdgeReport = {
-      graph,
-      orphans: this.detectOrphans(graph),
+      graph: connectedGraph,
+      orphanCount,
       fileTypes,
     };
 
@@ -37,25 +39,29 @@ export class Edge {
     return report;
   }
 
-  private detectOrphans(graph: EdgeReport["graph"]): string[] {
-    const inboundCounts = Object.keys(graph).reduce<Record<string, number>>(
-      (counts, node) => {
-        counts[node] = 0;
-        return counts;
-      },
-      {}
-    );
+  private separateOrphans(graph: EdgeReport["graph"]): {
+    connectedGraph: EdgeReport["graph"];
+    orphanCount: number;
+  } {
+    const hasInbound = new Set<string>();
+    for (const deps of Object.values(graph)) {
+      for (const dep of deps) {
+        hasInbound.add(dep);
+      }
+    }
 
-    Object.values(graph).forEach((dependencies) => {
-      dependencies.forEach((dependency) => {
-        inboundCounts[dependency] = (inboundCounts[dependency] ?? 0) + 1;
-      });
-    });
+    const connectedGraph: EdgeReport["graph"] = {};
+    let orphanCount = 0;
 
-    return Object.entries(inboundCounts)
-      .filter(([, inboundCount]) => inboundCount === 0)
-      .map(([node]) => node)
-      .sort((left, right) => left.localeCompare(right));
+    for (const [node, deps] of Object.entries(graph)) {
+      if (deps.length > 0 || hasInbound.has(node)) {
+        connectedGraph[node] = deps;
+      } else {
+        orphanCount++;
+      }
+    }
+
+    return { connectedGraph, orphanCount };
   }
 
   private detectCycles(graph: EdgeReport["graph"]): string[][] {

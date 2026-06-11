@@ -1,6 +1,6 @@
 export interface EdgeReport {
   graph: { [path: string]: string[] };
-  orphans: string[];
+  orphanCount: number;
   cycles?: string[][];
   fileTypes: { [extension: string]: number };
 }
