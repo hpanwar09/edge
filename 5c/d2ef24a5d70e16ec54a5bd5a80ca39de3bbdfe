@@ -1,0 +1,23 @@
+view-report.html
+  s_2099ecd19eb969::t_d64d6b9db59661 327-348,355,358,360-364,368,373-374,376-379,383,387-391,393-396,399-420,435-446,450-468
+  s_2099ecd19eb969::t_c78ad8cd5b28a1 547
+  s_2099ecd19eb969::t_607f6b44d4c36a 500
+  s_2099ecd19eb969::t_1d242cf2115aa1 625-627
+  s_2099ecd19eb969::t_22027ecd1bdb94 254,257-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5cd2ef24a5d70e16ec54a5bd5a80ca39de3bbdfe",
+  "prompts": {},
+  "sessions": {
+    "s_2099ecd19eb969": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ses_149e4e48fffe8kfiqX0hEq3k1a",
+        "model": "unknown"
+      },
+      "human_author": "himanshu <139762633+hpanwar09@users.noreply.github.com>"
+    }
+  }
+}
