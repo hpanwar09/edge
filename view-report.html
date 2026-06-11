@@ -296,7 +296,8 @@
         .style("z-index", "1000");
 
       const cycleNodeSet = new Set(cycles.flat());
-      const showNames = document.querySelector("[name=showFileNames]")?.checked;
+      const isShowNames = () =>
+        document.querySelector("[name=showFileNames]")?.checked;
 
       let transform = d3.zoomIdentity;
       const nodeRadius = 4;
@@ -421,9 +422,10 @@
           ctx.stroke();
         }
 
-        if (showNames && transform.k > 1.5) {
+        if (isShowNames()) {
           ctx.fillStyle = "#333";
-          ctx.font = "3px sans-serif";
+          const fontSize = Math.max(3, 10 / transform.k);
+          ctx.font = `${fontSize}px sans-serif`;
           for (const node of graph.nodes) {
             ctx.fillText(node.id, node.x + nodeRadius + 2, node.y + 1);
           }
