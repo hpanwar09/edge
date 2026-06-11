@@ -1,0 +1,21 @@
+lib/api.ts
+  s_2099ecd19eb969::t_7b91ece9306c7a 27-28,30-31,42-62,64
+lib/report.ts
+  s_2099ecd19eb969::t_7f89a9c7b3cc7d 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3988e32cae866300a30c41ac7444ec0bcab1eec5",
+  "prompts": {},
+  "sessions": {
+    "s_2099ecd19eb969": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ses_149e4e48fffe8kfiqX0hEq3k1a",
+        "model": "unknown"
+      },
+      "human_author": "himanshu <139762633+hpanwar09@users.noreply.github.com>"
+    }
+  }
+}
