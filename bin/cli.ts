@@ -1,7 +1,5 @@
 import { Edge, EdgeConfig } from "../lib/api.ts";
 import { parseArgs, ParseOptions } from "@std/cli/parse-args";
-import { DOMParser } from "jsr:@b-fuze/deno-dom";
-import { open } from "https://deno.land/x/open/index.ts";
 
 async function main() {
   const args = parseArguments(Deno.args);
@@ -35,23 +33,18 @@ async function main() {
   }
 
   if (args.html) {
-    const html = Deno.readTextFileSync("view-report.html");
-    const document = new DOMParser().parseFromString(html, "text/html");
-    const firstScript = document.querySelector("script")!;
-
-    const dataTag = document.createElement("script");
-    dataTag.innerText = `window.report = ${JSON.stringify(report)};`;
-
-    firstScript.parentElement!.insertBefore(dataTag, firstScript);
-
-    const output = `<!DOCTYPE html><html lang="en">${
-      document.documentElement!.innerHTML
-    }</html>`;
+    const template = Deno.readTextFileSync("view-report.html");
+    const dataScript = `<script>window.report = ${JSON.stringify(
+      report
+    )};</script>`;
+    // Inject data script right before the first <script tag
+    const output = template.replace("<script", `${dataScript}\n  <script`);
     Deno.writeFileSync("edge_analysis.html", encoder.encode(output));
   }
 
   if (args.open) {
-    await open("edge_analysis.html");
+    const command = new Deno.Command("open", { args: ["edge_analysis.html"] });
+    await command.output();
   }
 }
 
