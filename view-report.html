@@ -498,11 +498,14 @@
         keys = keys.filter((k) => checkedTypes.includes(getFileType(k)));
 
         if (linkDisplay === "connected") {
-          const hasOutgoing = new Set(keys.filter((k) => graph[k].length > 0));
+          const filteredSet = new Set(keys);
+          const hasOutgoing = new Set(
+            keys.filter((k) => graph[k].some((dep) => filteredSet.has(dep)))
+          );
           const hasIncoming = new Set();
           for (const k of keys) {
             for (const dep of graph[k]) {
-              hasIncoming.add(dep);
+              if (filteredSet.has(dep)) hasIncoming.add(dep);
             }
           }
           keys = keys.filter((k) => hasOutgoing.has(k) || hasIncoming.has(k));
