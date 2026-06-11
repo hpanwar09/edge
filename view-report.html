@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Analysis Result</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
     <style>
-      html, body {
+      html,
+      body {
         padding: 0;
         margin: 0;
       }
@@ -35,340 +41,549 @@
         height: 100%;
       }
     </style>
-</head>
-<body>
-    <div id="container"> 
-    </div>
+  </head>
+  <body>
+    <div id="container"></div>
     <div id="info-bar" class="bg-light p-4 shadow">
       <div class="row h-100">
-        <div class="col-3">
+        <div class="col-2">
           <h5 class="mb-2">Display</h5>
 
           <div class="row">
-            <div class="col-4">Graph:</div>
-            <div class="col-8">
+            <div class="col-12">
               <div class="form-check">
-                <input class="form-check-input" type="radio" name="graphDisplay" value="full" id="full" checked>
+                <input
+                  class="form-check-input"
+                  type="radio"
+                  name="graphDisplay"
+                  value="full"
+                  id="full"
+                  checked
+                />
                 <label class="form-check-label" for="full">Full Graph</label>
               </div>
               <div class="form-check">
-                <input class="form-check-input" type="radio" name="graphDisplay" value="cycles" id="cycles" >
+                <input
+                  class="form-check-input"
+                  type="radio"
+                  name="graphDisplay"
+                  value="cycles"
+                  id="cycles"
+                />
                 <label class="form-check-label" for="cycles">Cycles Only</label>
               </div>
               <div class="form-check">
-                <input class="form-check-input" type="radio" name="graphDisplay" value="orphans" id="orphans" >
-                <label class="form-check-label" for="orphans">Orphans Only</label>
+                <input
+                  class="form-check-input"
+                  type="radio"
+                  name="graphDisplay"
+                  value="orphans"
+                  id="orphans"
+                />
+                <label class="form-check-label" for="orphans"
+                  >Orphans Only</label
+                >
               </div>
             </div>
           </div>
 
-          <div class="mb-3 form-check">
-            <input class="form-check-input" type="checkbox" name="showFileNames" id="showFileNames">
-            <label class="form-check-label" for="showFileNames">Show file names</label>
+          <div class="mb-3 form-check mt-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              name="showFileNames"
+              id="showFileNames"
+            />
+            <label class="form-check-label" for="showFileNames"
+              >Show file names</label
+            >
           </div>
+        </div>
+        <div class="col-3 d-flex flex-column h-100">
+          <h5 class="mb-2">File Types</h5>
+          <div class="mb-2" style="font-size: 0.85em; color: #555">
+            Files: <strong id="stat-files">0</strong> | Edges:
+            <strong id="stat-edges">0</strong> | Cycles:
+            <strong id="stat-cycles">0</strong>
+          </div>
+          <div class="mb-2">
+            <a
+              href="#"
+              id="toggle-all-types"
+              class="text-decoration-none"
+              style="font-size: 0.9em"
+              >Deselect All</a
+            >
+          </div>
+          <div
+            class="d-flex flex-column flex-grow-1 overflow-y-auto"
+            id="file-types-list"
+          ></div>
         </div>
         <div class="col-3 d-flex flex-column h-100">
           <h5 class="mb-2">Search</h5>
           <div class="mb-3 input-group">
-            <input type="search" class="form-control" placeholder="Search file..." id="search-box" />
+            <input
+              type="search"
+              class="form-control"
+              placeholder="Search file..."
+              id="search-box"
+            />
           </div>
-          <div class="d-flex flex-column flex-1 overflow-y-auto">
+          <div class="d-flex flex-column flex-grow-1 overflow-y-auto">
             <div class="list-group" id="search-result"></div>
           </div>
         </div>
-        <div class="col-6">
-          <div class="mb-3" id="file-info" style="display: none">
+        <div class="col-4 d-flex flex-column h-100">
+          <div
+            class="mb-3 d-flex flex-column flex-grow-1 overflow-y-auto"
+            id="file-info"
+            style="display: none !important"
+          >
             <h5 class="mb-2">File Info</h5>
             <p><b>File Name:</b>&nbsp;<code id="filename"></code></p>
-            <p><b>Cycles (<span id="cycle-count"></span>)</b>:</p>
+            <p>
+              <b>Cycles (<span id="cycle-count"></span>)</b>:
+            </p>
             <ul id="cycle-list"></ul>
           </div>
-        </div> 
-      </div> 
+        </div>
+      </div>
     </div>
-</body>
-<script type="module">
-  import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+  </body>
+  <script type="module">
+    import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
-  const id = (nodeId) => btoa(nodeId).replaceAll('=', '');
+    const id = (nodeId) => btoa(nodeId).replaceAll("=", "");
 
-  let cachedFiles = [];
+    let cachedFiles = [];
+    window.currentCycles = [];
 
-  function search(searchTerm) {
-    const searchResultList = document.querySelector('#search-result');
-    const potentialMatches = cachedFiles.filter(file => file.includes(searchTerm));
-
-    let html = '';
-    for (const file of potentialMatches) {
-      html += ` <button type="button" class="list-group-item list-group-item-action search-result" value="${file}">${file}</button>`;
-    }
-    searchResultList.innerHTML = html; 
-    document.querySelectorAll('.search-result').forEach(result => result.onclick = (e) => showFileInfo({ id: e.target.value }));
-  }
-
-  document.getElementById('search-box').oninput = (e) => search(e.target.value);
-
-  function showFileInfo(file) {
-    const cycles = report.cycles.filter(cycle => cycle.some(n => n === file.id));
-    const fileInfoPanel = document.querySelector("#file-info");
-    const fileName = document.querySelector("#filename");
-    const cycleCount = document.querySelector("#cycle-count");
-    const cycleList = document.querySelector("#cycle-list");
-
-    fileInfoPanel.style.display = 'block';
-    fileName.innerText = file.id;
-    cycleCount.innerText = cycles.length;
-
-    let listHTML = '';
-    for (let i = 0; i < cycles.length; i++) {
-      const cycle = cycles[i];
-      listHTML += `<li><b>Cycle #${i + 1} (${cycle.length} files)</b><br />`;
-      listHTML += cycle.map(f => file.id == f ? `<b><code>${f}</code></b><br/>` : `<code>${f}</code><br/>`).join(`→&nbsp;`);
-      listHTML += cycle[0] == file.id ? `→&nbsp;<b><code>${cycle[0]}</code></b>` : `→&nbsp;<code>${cycle[0]}</code>`;
-      listHTML += `</li>`;
-    }
-
-    cycleList.innerHTML = listHTML;
-  }
-
-  function transformToD3Format(report, filter) {
-    const graph = filter(report.graph);
-    const files = Object.keys(graph);
-    cachedFiles = files;
-    const nodes = files.map((file) => ({ id: file }));
-    const links = files.flatMap((file) => graph[file].filter(f => files.includes(f)).map((target) => ({
-      source: file,
-      target: target,
-    })));
-
-    return { nodes, links };
-  }
-
-  function renderGraph(graph, cycles) {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    const hasCycle = (node) => {
-      return cycles.some(cycle => cycle.some(n => n === node.id))
+    const getFileType = (filename) => {
+      const match = filename.match(/\.[^/.]+$/);
+      return match ? match[0] : "";
     };
 
-    d3.select('svg').remove();
+    const fileTypeColors = {
+      ".rb": "#CC342D",
+      ".slim": "#8B5CF6",
+      ".js": "#F7DF1E",
+      ".jsx": "#61DAFB",
+      ".ts": "#3178C6",
+      ".tsx": "#06B6D4",
+    };
 
-    const svg = d3
-      .select("#container")
-      .append("svg")
-      .attr("viewBox", `0 0 ${width} ${height}`) // Coordinate system
-      .attr("preserveAspectRatio", "xMidYMid meet"); // Preserve scaling
+    const getColor = (filename) => {
+      const ext = getFileType(filename);
+      return fileTypeColors[ext] || "#6B7280";
+    };
 
-    const zoomGroup = svg.append("g");
-
-    const simulation = d3
-      .forceSimulation(graph.nodes)
-      .force("link", d3.forceLink(graph.links).id((d) => d.id).distance(100))
-      .force("charge", d3.forceManyBody().strength(-200))
-      .force("center", d3.forceCenter(width / 2, height / 2));
-
-    svg.append("defs")
-      .append("marker")
-      .attr("id", "arrowhead")
-      .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 15) // Adjust to position the arrowhead correctly
-      .attr("refY", 0)
-      .attr("markerWidth", 6)
-      .attr("markerHeight", 6)
-      .attr("orient", "auto")
-      .append("path")
-      .attr("d", "M0,-5L10,0L0,5")
-      .attr("fill", "#999"); // Arrow color
-
-    const link = zoomGroup
-      .append("g")
-      .selectAll("line")
-      .data(graph.links)
-      .enter()
-      .append("line")
-      .attr("stroke-width", 2)
-      .attr("stroke", "#999")
-      .attr("marker-end", "url(#arrowhead)")
-      .attr("class", (d) => `link-${id(d.source.id)}-${id(d.target.id)} link-${id(d.target.id)}-${id(d.source.id)}`);
-
-    window.link = link;
-
-    const tooltip = d3.select("#container")
-      .append("div")
-      .style("opacity", 0)
-      .attr("class", "tooltip")
-      .style("background-color", "white")
-      .style("border", "solid")
-      .style("border-width", "2px")
-      .style("border-radius", "5px")
-      .style("position", "absolute")
-      .style("pointer-events", "none")
-      .style("padding", "5px");
-
-    const node = zoomGroup
-      .append("g")
-      .selectAll("circle")
-      .data(graph.nodes)
-      .enter()
-      .append("g") 
-      .attr("class", (d) => `node-${id(d.id)}`)
-      .attr("transform", d => `translate(${d.x},${d.y})`)
-      .call(
-        d3.drag()
-          .on("start", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-          })
-          .on("drag", (event, d) => {
-            d.fx = event.x;
-            d.fy = event.y;
-          })
-          .on("end", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          })
+    function search(searchTerm) {
+      const searchResultList = document.querySelector("#search-result");
+      const potentialMatches = cachedFiles.filter((file) =>
+        file.includes(searchTerm)
       );
 
-    node
-      .append("circle")
-      .attr("r", 5)
-      .attr("fill", (d) => hasCycle(d) ? "grey" : "green")
-      .attr("stroke", "black")
-      .on("click", (event, d) => {
-        showFileInfo(d);
-      })
-      .on("mouseover", (event, d) => {
-        d3.selectAll(`.node-${id(d.id)}`).selectAll('circle').attr("fill", "red");
+      let html = "";
+      for (const file of potentialMatches) {
+        html += ` <button type="button" class="list-group-item list-group-item-action search-result" value="${file}">${file}</button>`;
+      }
+      searchResultList.innerHTML = html;
+      document
+        .querySelectorAll(".search-result")
+        .forEach(
+          (result) =>
+            (result.onclick = (e) => showFileInfo({ id: e.target.value }))
+        );
+    }
 
-        d.cycles = cycles.filter(cycle => cycle.some(n => n === d.id));
+    document.getElementById("search-box").oninput = (e) =>
+      search(e.target.value);
 
-        tooltip
-          .style("opacity", 1);
+    function showFileInfo(file) {
+      const cycles = window.currentCycles.filter((cycle) =>
+        cycle.some((n) => n === file.id)
+      );
+      const fileInfoPanel = document.querySelector("#file-info");
+      const fileName = document.querySelector("#filename");
+      const cycleCount = document.querySelector("#cycle-count");
+      const cycleList = document.querySelector("#cycle-list");
 
-        // Highlight connected links
-        // d3.selectAll(`.link-${btoa(d.id).replaceAll('=', '')}`).attr("stroke", "red");
+      fileInfoPanel.style.setProperty("display", "flex", "important");
+      fileName.innerText = file.id;
+      cycleCount.innerText = cycles.length;
 
-        d.cycles.forEach(cycle => {
-          cycle.forEach((n, i) => {
-            const next = cycle[(i + 1) % cycle.length];
-            d3.selectAll(`.link-${id(n)}-${id(next)}`).attr("stroke", "red");
-            d3.selectAll(`.node-${id(n)}`).selectAll('circle').attr("fill", "red");
-          })
+      let listHTML = "";
+      for (let i = 0; i < cycles.length; i++) {
+        const cycle = cycles[i];
+        listHTML += `<li><b>Cycle #${i + 1} (${cycle.length} files)</b><br />`;
+        listHTML += cycle
+          .map((f) =>
+            file.id == f
+              ? `<b><code>${f}</code></b><br/>`
+              : `<code>${f}</code><br/>`
+          )
+          .join(`→&nbsp;`);
+        listHTML +=
+          cycle[0] == file.id
+            ? `→&nbsp;<b><code>${cycle[0]}</code></b>`
+            : `→&nbsp;<code>${cycle[0]}</code>`;
+        listHTML += `</li>`;
+      }
+
+      cycleList.innerHTML = listHTML;
+    }
+
+    function transformToD3Format(report, filter) {
+      const graph = filter(report.graph);
+      const files = Object.keys(graph);
+      cachedFiles = files;
+      const nodes = files.map((file) => ({ id: file }));
+      const links = files.flatMap((file) =>
+        graph[file]
+          .filter((f) => files.includes(f))
+          .map((target) => ({
+            source: file,
+            target: target,
+          }))
+      );
+
+      return { nodes, links };
+    }
+
+    function renderGraph(graph, cycles) {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      d3.select("svg").remove();
+
+      const svg = d3
+        .select("#container")
+        .append("svg")
+        .attr("viewBox", `0 0 ${width} ${height}`) // Coordinate system
+        .attr("preserveAspectRatio", "xMidYMid meet"); // Preserve scaling
+
+      const zoomGroup = svg.append("g");
+
+      const simulation = d3
+        .forceSimulation(graph.nodes)
+        .force(
+          "link",
+          d3
+            .forceLink(graph.links)
+            .id((d) => d.id)
+            .distance(100)
+        )
+        .force("charge", d3.forceManyBody().strength(-200))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+
+      svg
+        .append("defs")
+        .append("marker")
+        .attr("id", "arrowhead")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 15) // Adjust to position the arrowhead correctly
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#999"); // Arrow color
+
+      const link = zoomGroup
+        .append("g")
+        .selectAll("line")
+        .data(graph.links)
+        .enter()
+        .append("line")
+        .attr("stroke-width", 2)
+        .attr("stroke", "#999")
+        .attr("marker-end", "url(#arrowhead)")
+        .attr(
+          "class",
+          (d) =>
+            `link-${id(d.source.id)}-${id(d.target.id)} link-${id(
+              d.target.id
+            )}-${id(d.source.id)}`
+        );
+
+      window.link = link;
+
+      const tooltip = d3
+        .select("#container")
+        .append("div")
+        .style("opacity", 0)
+        .attr("class", "tooltip")
+        .style("background-color", "white")
+        .style("border", "solid")
+        .style("border-width", "2px")
+        .style("border-radius", "5px")
+        .style("position", "absolute")
+        .style("pointer-events", "none")
+        .style("padding", "5px");
+
+      const node = zoomGroup
+        .append("g")
+        .selectAll("circle")
+        .data(graph.nodes)
+        .enter()
+        .append("g")
+        .attr("class", (d) => `node-${id(d.id)}`)
+        .attr("transform", (d) => `translate(${d.x},${d.y})`)
+        .call(
+          d3
+            .drag()
+            .on("start", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0.3).restart();
+              d.fx = d.x;
+              d.fy = d.y;
+            })
+            .on("drag", (event, d) => {
+              d.fx = event.x;
+              d.fy = event.y;
+            })
+            .on("end", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0);
+              d.fx = null;
+              d.fy = null;
+            })
+        );
+
+      node
+        .append("circle")
+        .attr("r", 5)
+        .attr("fill", (d) => getColor(d.id))
+        .attr("stroke", "black")
+        .on("click", (event, d) => {
+          showFileInfo(d);
         })
-      })
-      .on("mousemove", function (event, d) {
-        tooltip
-          .html(`
+        .on("mouseover", (event, d) => {
+          d3.selectAll(`.node-${id(d.id)}`)
+            .selectAll("circle")
+            .attr("fill", "red");
+
+          d.cycles = cycles.filter((cycle) => cycle.some((n) => n === d.id));
+
+          tooltip.style("opacity", 1);
+
+          // Highlight connected links
+          // d3.selectAll(`.link-${btoa(d.id).replaceAll('=', '')}`).attr("stroke", "red");
+
+          d.cycles.forEach((cycle) => {
+            cycle.forEach((n, i) => {
+              const next = cycle[(i + 1) % cycle.length];
+              d3.selectAll(`.link-${id(n)}-${id(next)}`).attr("stroke", "red");
+              d3.selectAll(`.node-${id(n)}`)
+                .selectAll("circle")
+                .attr("fill", "red");
+            });
+          });
+        })
+        .on("mousemove", function (event, d) {
+          tooltip
+            .html(
+              `
               File: <code>${d.id}</code><br>
-              Cycles (${d.cycles.length}) (${new Set(d.cycles.flat()).size} files):<br>
-                  ${d.cycles.map((cycle, i) => `
+              Cycles (${d.cycles.length}) (${
+                new Set(d.cycles.flat()).size
+              } files):<br>
+                  ${d.cycles
+                    .map(
+                      (cycle, i) => `
                   <p>
                       Cycle #${i + 1} (${cycle.length} files):
-                      <pre>${cycle.join('<br>->')}<br>->${cycle[0]}</pre>
-                  </p>`).join('<br>')}`)
-          .style("left", event.pageX + "px")
-          .style("top", event.pageY + "px")
-      })
-      .on("mouseout", (event, d) => {
-        d3.selectAll(`.node-${id(d.id)}`).selectAll('circle').attr("fill", (d) => hasCycle(d) ? "grey" : "green");
-
-        tooltip
-          .style("opacity", 0);
-
-        // Reset connected links
-        // d3.selectAll(`.link-${btoa(d.id).replaceAll('=', '')}`).attr("stroke", "#999");
-
-        d.cycles.forEach(cycle => {
-          cycle.forEach((n, i) => {
-            const next = cycle[(i + 1) % cycle.length];
-            d3.selectAll(`.link-${id(n)}-${id(next)}`).attr("stroke", "#999");
-            d3.selectAll(`.node-${id(n)}`).selectAll('circle').attr("fill", (ds) => hasCycle(ds) ? "grey" : "green");
-          })
+                      <pre>${cycle.join("<br>->")}<br>->${cycle[0]}</pre>
+                  </p>`
+                    )
+                    .join("<br>")}`
+            )
+            .style("left", event.pageX + "px")
+            .style("top", event.pageY + "px");
         })
+        .on("mouseout", (event, d) => {
+          d3.selectAll(`.node-${id(d.id)}`)
+            .selectAll("circle")
+            .attr("fill", (d) => getColor(d.id));
+
+          tooltip.style("opacity", 0);
+
+          // Reset connected links
+          // d3.selectAll(`.link-${btoa(d.id).replaceAll('=', '')}`).attr("stroke", "#999");
+
+          d.cycles.forEach((cycle) => {
+            cycle.forEach((n, i) => {
+              const next = cycle[(i + 1) % cycle.length];
+              d3.selectAll(`.link-${id(n)}-${id(next)}`).attr("stroke", "#999");
+              d3.selectAll(`.node-${id(n)}`)
+                .selectAll("circle")
+                .attr("fill", (ds) => getColor(ds.id));
+            });
+          });
+        });
+
+      node
+        .append("text")
+        .attr("dx", "5")
+        .attr("visibility", "hidden")
+        .text((d) => d.id);
+
+      window.node = node;
+
+      // Add zoom and pan behavior
+      const zoom = d3
+        .zoom()
+        .scaleExtent([0.1, 10]) // Set zoom scale limits
+        .on("zoom", (event) => {
+          zoomGroup.attr("transform", event.transform); // Apply zoom and pan transformations
+        });
+
+      svg.call(zoom); // Enable zoom on the SVG element
+
+      simulation.on("tick", () => {
+        link
+          .attr("x1", (d) => d.source.x)
+          .attr("y1", (d) => d.source.y)
+          .attr("x2", (d) => d.target.x)
+          .attr("y2", (d) => d.target.y);
+
+        node.attr("transform", (d) => `translate(${d.x},${d.y})`);
       });
 
-    node.append('text').attr('dx', '5').attr('visibility', 'hidden').text(d => d.id);
-
-    window.node = node;
-
-
-    // Add zoom and pan behavior
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 10]) // Set zoom scale limits
-      .on("zoom", (event) => {
-        zoomGroup.attr("transform", event.transform); // Apply zoom and pan transformations
+      // Handle window resizing
+      window.addEventListener("resize", () => {
+        const newWidth = window.innerWidth;
+        const newHeight = window.innerHeight;
+        svg.attr("viewBox", `0 0 ${newWidth} ${newHeight}`);
+        simulation.force("center", d3.forceCenter(newWidth / 2, newHeight / 2));
       });
+    }
 
-    svg.call(zoom); // Enable zoom on the SVG element
+    function updateGraph() {
+      if (!window.report) return;
 
-    simulation.on("tick", () => {
-      link
-        .attr("x1", (d) => d.source.x)
-        .attr("y1", (d) => d.source.y)
-        .attr("x2", (d) => d.target.x)
-        .attr("y2", (d) => d.target.y);
+      const checkedTypes = Array.from(
+        document.querySelectorAll(".file-type-checkbox:checked")
+      ).map((cb) => cb.value);
 
-      node.attr("transform", d => `translate(${d.x},${d.y})`);
-    });
+      const linkDisplay = document.querySelector(
+        "[name=graphDisplay]:checked"
+      ).value;
 
-    // Handle window resizing
-    window.addEventListener("resize", () => {
-      const newWidth = window.innerWidth;
-      const newHeight = window.innerHeight;
-      svg.attr("viewBox", `0 0 ${newWidth} ${newHeight}`);
-      simulation.force("center", d3.forceCenter(newWidth / 2, newHeight / 2));
-    });
-  }
+      const filter = (graph) => {
+        let keys = Object.keys(graph);
 
-  if (window.report) {
-    const data = transformToD3Format(report, (graph) => graph);
-    renderGraph(data, report.cycles);
-  }
+        // Apply file type filter
+        keys = keys.filter((k) => checkedTypes.includes(getFileType(k)));
 
-  // Controls
-  document.querySelectorAll('[name=graphDisplay]').forEach(control => {
-    control.onchange = () => {
-      const linkDisplay = document.querySelector("[name=graphDisplay]:checked").value;
-      if (linkDisplay === "full") {
-        const data = transformToD3Format(report, (graph) => graph);
-        renderGraph(data, report.cycles);
-      } else if (linkDisplay === "orphans") {
-        const filter = (graph) => {
-          return Object.keys(graph)
-            .filter(k => report.orphans.includes(k))
-            .reduce((obj, k) => ({
-              ...obj,
-              [k]: graph[k]
-            }), {});
-        };
-        const data = transformToD3Format(report, filter);
-        renderGraph(data, report.cycles);
-      } else {
-        const filter = (graph) => {
-          return Object.keys(graph)
-            .filter(k => report.cycles.some(cycle => cycle.includes(k)))
-            .reduce((obj, k) => ({
-              ...obj,
-              [k]: graph[k]
-            }), {});
-        };
-        const data = transformToD3Format(report, filter);
-        renderGraph(data, report.cycles);
+        // Apply display filter
+        if (linkDisplay === "orphans") {
+          keys = keys.filter((k) => report.orphans.includes(k));
+        } else if (linkDisplay === "cycles") {
+          keys = keys.filter((k) =>
+            report.cycles.some((cycle) => cycle.includes(k))
+          );
+        }
+
+        return keys.reduce(
+          (obj, k) => ({
+            ...obj,
+            [k]: graph[k],
+          }),
+          {}
+        );
+      };
+
+      const data = transformToD3Format(report, filter);
+
+      // Filter cycles to only include those where ALL nodes are present
+      const validFiles = new Set(data.nodes.map((n) => n.id));
+      const validCycles = report.cycles.filter((c) =>
+        c.every((n) => validFiles.has(n))
+      );
+
+      window.currentCycles = validCycles;
+
+      // Update stats
+      document.getElementById("stat-files").innerText =
+        data.nodes.length.toLocaleString();
+      document.getElementById("stat-edges").innerText =
+        data.links.length.toLocaleString();
+      document.getElementById("stat-cycles").innerText =
+        validCycles.length.toLocaleString();
+
+      renderGraph(data, validCycles);
+
+      // Re-apply show file names setting if needed
+      const showNames = document.querySelector("[name=showFileNames]").checked;
+      if (window.node) {
+        window.node
+          .select("text")
+          .attr("visibility", showNames ? "visible" : "hidden");
       }
     }
-  });
 
-  document.querySelector('[name=showFileNames]').onchange = (e) => {
-    const isEnabled = e.target.checked;
+    if (window.report) {
+      const fileTypesList = document.getElementById("file-types-list");
+      let typesHtml = "";
 
-    if (isEnabled) {
-      node.select('text').attr('visibility', 'visible');
-    } else {
-      node.select('text').attr('visibility', 'hidden');
+      const types = Object.keys(report.fileTypes || {}).sort();
+
+      types.forEach((type) => {
+        const count = report.fileTypes[type];
+        const color = fileTypeColors[type] || "#6B7280";
+        typesHtml += `
+          <div class="form-check">
+            <input class="form-check-input file-type-checkbox" type="checkbox" value="${type}" id="type-${id(
+          type
+        )}" checked>
+            <label class="form-check-label d-flex align-items-center" for="type-${id(
+              type
+            )}">
+              <span style="display:inline-block; width:10px; height:10px; background-color:${color}; border-radius:50%; margin-right:6px;"></span>
+              ${type} (${count.toLocaleString()})
+            </label>
+          </div>
+        `;
+      });
+      fileTypesList.innerHTML = typesHtml;
+
+      document.querySelectorAll(".file-type-checkbox").forEach((cb) => {
+        cb.addEventListener("change", updateGraph);
+      });
+
+      document
+        .getElementById("toggle-all-types")
+        .addEventListener("click", (e) => {
+          e.preventDefault();
+          const allChecked = Array.from(
+            document.querySelectorAll(".file-type-checkbox")
+          ).every((cb) => cb.checked);
+          const targetState = !allChecked;
+          document.querySelectorAll(".file-type-checkbox").forEach((cb) => {
+            cb.checked = targetState;
+          });
+          e.target.innerText = targetState ? "Deselect All" : "Select All";
+          updateGraph();
+        });
+
+      updateGraph();
     }
-  }
-</script>
+
+    // Controls
+    document.querySelectorAll("[name=graphDisplay]").forEach((control) => {
+      control.onchange = updateGraph;
+    });
+
+    document.querySelector("[name=showFileNames]").onchange = (e) => {
+      const isEnabled = e.target.checked;
+      if (window.node) {
+        if (isEnabled) {
+          window.node.select("text").attr("visibility", "visible");
+        } else {
+          window.node.select("text").attr("visibility", "hidden");
+        }
+      }
+    };
+  </script>
 </html>

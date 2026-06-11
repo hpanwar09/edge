@@ -1,80 +1,99 @@
-// @deno-types="npm:@types/madge"
-import { MadgeConfig } from 'npm:madge';
 import { EdgeReport } from "./report.ts";
-import madge from "npm:madge";
+import { MultiLanguageScanner } from "./scanner.ts";
 
 export interface EdgeConfig {
-    madge?: MadgeConfig;
-    includeCycles?: boolean;
+  extensions?: string[];
+  includeCycles?: boolean;
 }
 
 const defaultConfig: EdgeConfig = {
-    madge: {
-        fileExtensions: ['tsx', 'js', 'jsx', 'ts']
-    },
-    includeCycles: true
+  extensions: ["rb", "slim", "js", "jsx", "ts", "tsx"],
+  includeCycles: true,
 };
 
 export class Edge {
-    private readonly config: EdgeConfig;
+  private readonly config: EdgeConfig;
 
-    constructor(private path: string, config: EdgeConfig) {
-        this.config = { ...defaultConfig, ...config };
+  constructor(private path: string, config: EdgeConfig) {
+    this.config = { ...defaultConfig, ...config };
+  }
+
+  async analyze(): Promise<EdgeReport> {
+    const scanner = new MultiLanguageScanner(this.path, {
+      extensions: this.config.extensions,
+    });
+    const { graph, fileTypes } = await scanner.scan();
+
+    const report: EdgeReport = {
+      graph,
+      orphans: this.detectOrphans(graph),
+      fileTypes,
+    };
+
+    if (this.config.includeCycles) {
+      report.cycles = this.detectCycles(graph);
     }
 
-    async analyze(): Promise<EdgeReport> {
-        const madgeResult = await madge(this.path, this.config.madge);
+    return report;
+  }
 
-        const graph = madgeResult.obj();
+  private detectOrphans(graph: EdgeReport["graph"]): string[] {
+    const inboundCounts = Object.keys(graph).reduce<Record<string, number>>(
+      (counts, node) => {
+        counts[node] = 0;
+        return counts;
+      },
+      {}
+    );
 
-        const report: EdgeReport = {
-            graph,
-            orphans: madgeResult.orphans(),
-        };
+    Object.values(graph).forEach((dependencies) => {
+      dependencies.forEach((dependency) => {
+        inboundCounts[dependency] = (inboundCounts[dependency] ?? 0) + 1;
+      });
+    });
 
-        if (this.config.includeCycles) {
-            report.cycles = this.detectCycles(graph);
-        }
+    return Object.entries(inboundCounts)
+      .filter(([, inboundCount]) => inboundCount === 0)
+      .map(([node]) => node)
+      .sort((left, right) => left.localeCompare(right));
+  }
 
-        return report;
+  private detectCycles(graph: EdgeReport["graph"]): string[][] {
+    const adjacencyList = graph;
+
+    const visited = new Set();
+    const stack = new Set();
+    const cycles: string[][] = [];
+
+    function dfs(node: string, path: string[] = []) {
+      if (stack.has(node)) {
+        // Found a cycle
+        const cycleStartIndex = path.indexOf(node);
+        const cycle = path.slice(cycleStartIndex);
+        cycles.push(cycle);
+        return;
+      }
+
+      if (visited.has(node)) return;
+
+      visited.add(node);
+      stack.add(node);
+      path.push(node);
+
+      (adjacencyList[node] || []).forEach((neighbor) => {
+        dfs(neighbor, path);
+      });
+
+      stack.delete(node);
+      path.pop();
     }
 
-    private detectCycles(graph: EdgeReport['graph']): string[][] {
-        const adjacencyList = graph;
+    Object.keys(graph).forEach((node) => {
+      if (!visited.has(node)) {
+        dfs(node);
+      }
+    });
 
-        const visited = new Set();
-        const stack = new Set();
-        const cycles: string[][] = [];
-
-        function dfs(node: string, path: string[] = []) {
-            if (stack.has(node)) {
-                // Found a cycle
-                const cycleStartIndex = path.indexOf(node);
-                const cycle = path.slice(cycleStartIndex);
-                cycles.push(cycle);
-                return;
-            }
-
-            if (visited.has(node)) return;
-
-            visited.add(node);
-            stack.add(node);
-            path.push(node);
-
-            (adjacencyList[node] || []).forEach((neighbor) => {
-                dfs(neighbor, path);
-            });
-
-            stack.delete(node);
-            path.pop();
-        }
-
-        Object.keys(graph).forEach((node) => {
-            if (!visited.has(node)) {
-                dfs(node);
-            }
-        });
-        
-        return cycles;
-    }
+    return cycles;
+  }
 }
