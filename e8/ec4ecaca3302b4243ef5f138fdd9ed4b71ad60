@@ -1,0 +1,32 @@
+view-report.html
+  s_2099ecd19eb969::t_0c4c160c3ac67a 129
+  s_2099ecd19eb969::t_4512df9bb49bb3 599-600
+  s_2099ecd19eb969::t_0f198541c6a6c6 560
+  s_2099ecd19eb969::t_1c1dac800a55d2 59-60,63-65,77-87
+  s_382574073cf142::t_096bcb5ee46cec 270,272-273,275-282,295-316,318-323,325-345,347-359,361-374,376-382,384-387,389-399,401-435,438-441,443-481
+  s_2099ecd19eb969::t_a5baef7c03dc55 500-509
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e8ec4ecaca3302b4243ef5f138fdd9ed4b71ad60",
+  "prompts": {},
+  "sessions": {
+    "s_2099ecd19eb969": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ses_149e4e48fffe8kfiqX0hEq3k1a",
+        "model": "unknown"
+      },
+      "human_author": "himanshu <139762633+hpanwar09@users.noreply.github.com>"
+    },
+    "s_382574073cf142": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_149e4e48fffe8kfiqX0hEq3k1a",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "himanshu <139762633+hpanwar09@users.noreply.github.com>"
+    }
+  }
+}
